@@ -436,6 +436,23 @@ select.input option {
   font-size: 12px;
 }
 
+/* Вязаные цифры отсчёта: готовые картинки-спрайты, которые рисует script.js */
+.countdown__cell .knit-row {
+  display: flex;
+  justify-content: center;
+  margin: -6px 0 2px;
+}
+
+.knit-row img {
+  display: block;
+  width: calc(96% / var(--n, 2));
+  max-width: 74px;
+  aspect-ratio: 18 / 25;
+  object-fit: contain;
+  margin: 0 -3%;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
+}
+
 .countdown__promo {
   margin: 18px 0 0;
   color: var(--muted);
@@ -682,53 +699,77 @@ select.input option {
   font-size: 34px;
 }
 
-/* ---------- Bauble (discount) ---------- */
+/* ---------- Sale tag (discount) ---------- */
 
 .bauble {
   position: absolute;
   z-index: 1;
-  top: -1px;
-  right: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform-origin: top center;
+  top: -22px;
+  right: 12px;
+  display: block;
+  width: 86px;
+  transform-origin: 50% 4px;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
 }
 
-.bauble::before {
-  content: "";
-  width: 2px;
-  height: 18px;
-  background: rgba(255, 255, 255, 0.45);
+.sale-tag {
+  display: block;
+  width: 100%;
+  overflow: visible;
 }
 
-.bauble__cap {
-  width: 12px;
-  height: 6px;
-  border-radius: 2px 2px 0 0;
-  background: var(--gold);
+.sale-tag__string {
+  fill: none;
+  stroke: #f2b84b;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 
-.bauble__ball {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #ff9aa2, var(--red) 45%, #8d0b16);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
-  font-size: 14px;
+.sale-tag__body {
+  fill: #d7263d;
+}
+
+.sale-tag__body path {
+  stroke: #d7263d;
+}
+
+.sale-tag__shade {
+  fill: rgba(120, 8, 24, 0.28);
+}
+
+.sale-tag__inner {
+  fill: none;
+  stroke: #fbe3cf;
+  stroke-width: 1.1;
+  opacity: 0.85;
+}
+
+.sale-tag__hole {
+  fill: #3a0a12;
+}
+
+.sale-tag__dots {
+  fill: #fbe3cf;
+  opacity: 0.7;
+}
+
+.sale-tag text {
+  text-anchor: middle;
+  fill: #fdeee0;
+  font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
   font-weight: 800;
 }
 
-.deal__image .bauble {
-  top: 0;
+.sale-tag .sale-tag__label {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
 }
 
-.deal__image .bauble__ball {
-  width: 70px;
-  height: 70px;
-  font-size: 18px;
+.deal__image .bauble {
+  top: 6px;
+  right: 18px;
+  width: 96px;
 }
 
 .product:hover .bauble,

@@ -69,7 +69,28 @@ const priceOf =(p) => (p.id === DEAL_ID ? Math.floor((p.price * (1 - DEAL_RATE))
 // старая цена есть только у товаров со скидкой; у подарка дня ею служит обычная цена
 const oldOf = (p) => p.old || (p.id === DEAL_ID ? p.price : 0);
 const discountOf = (p) => (oldOf(p) ? Math.round((1 - priceOf(p) / oldOf(p)) * 100) : 0);
-const bauble = (p) => !discountOf(p) ? '' : `<span class="bauble"><span class="bauble__cap"></span><span class="bauble__ball">−${discountOf(p)}%</span></span>`;
+// Красные распродажные ярлыки на золотом шнурке: четыре формы, чередуются по товарам
+const TAG_SHAPES = [
+  { body: '<rect x="11" y="24" width="58" height="74" rx="11"/>', inner: '<rect x="15.5" y="28.5" width="49" height="65" rx="8"/>', dots: [[22, 40], [58, 40], [24, 88], [56, 88]], hole: 33, label: 56, value: 78, size: 19 },
+  { body: '<circle cx="40" cy="64" r="35"/>', inner: '<circle cx="40" cy="64" r="30.5"/>', dots: [[22, 52], [58, 52], [28, 86], [52, 86]], hole: 36, label: 57, value: 79, size: 19 },
+  { body: '<rect x="30" y="22" width="20" height="13" rx="3.5"/><circle cx="40" cy="67" r="33"/>', inner: '<circle cx="40" cy="67" r="28.5"/>', dots: [[23, 55], [57, 55], [29, 89], [51, 89]], hole: 28, label: 60, value: 82, size: 19 },
+  { body: '<path d="M40 22 57 45h-8l14 20h-9l15 22a7 7 0 0 1-6 11H17a7 7 0 0 1-6-11l15-22h-9l14-20h-8z" stroke-width="5" stroke-linejoin="round"/>', inner: '', dots: [[40, 44], [33, 56], [47, 56], [18, 92], [62, 92]], hole: 31, label: 73, value: 91, size: 15 },
+];
+
+function saleTag(percent, variant) {
+  const s = TAG_SHAPES[variant % TAG_SHAPES.length];
+  return `<svg class="sale-tag" viewBox="0 0 80 104" role="img" aria-label="Скидка ${percent}%">
+    <g class="sale-tag__body">${s.body}</g>
+    <g class="sale-tag__inner">${s.inner}</g>
+    <g class="sale-tag__dots">${s.dots.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1"/>`).join('')}</g>
+    <circle class="sale-tag__hole" cx="40" cy="${s.hole}" r="2.6"/>
+    <path class="sale-tag__string" d="M40 ${s.hole}C31 ${s.hole - 12} 33 3 40 3s9 ${s.hole - 15} 0 ${s.hole - 3}"/>
+    <text class="sale-tag__label" x="40" y="${s.label}">СКИДКА</text>
+    <text x="40" y="${s.value}" font-size="${s.size}">−${percent}%</text>
+  </svg>`;
+}
+
+const bauble = (p) => !discountOf(p) ? '' : `<span class="bauble">${saleTag(discountOf(p), Math.floor(p.id / 2))}</span>`;
 
 const state = {
   cat: 'all',
@@ -468,6 +489,214 @@ function showToast(text) {
   toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
 }
 
+/* ---------- Вязаные цифры отсчёта ---------- */
+
+// Осевые линии цифр в поле 60×100; толщину даёт обводка, фактуру — петли пряжи
+const KNIT_DIGITS = {
+  0: 'M30 12C44 12 48 28 48 50S44 88 30 88 12 72 12 50 16 12 30 12Z',
+  1: 'M17 29 33 12V88',
+  2: 'M13 30C13 8 47 8 47 30 47 46 28 58 13 88H48',
+  3: 'M14 22C22 8 46 10 46 30 46 44 36 48 26 49 38 50 48 56 48 68 48 90 20 92 12 78',
+  4: 'M41 88V12L12 64H50',
+  5: 'M46 12H18L14 46C24 38 48 40 48 64 48 90 20 92 12 78',
+  6: 'M44 16C26 8 12 28 12 60 12 94 48 94 48 66 48 44 20 42 13 60',
+  7: 'M12 12H48L26 88',
+  8: 'M30 48C16 48 14 12 30 12S44 48 30 48C12 48 10 88 30 88S48 48 30 48Z',
+  9: 'M16 84C34 92 48 72 48 40 48 6 12 6 12 34 12 56 40 58 47 40',
+};
+const KNIT_YARN = {
+  red: { dark: '#6a0812', base: '#c41e2e', light: '#f47480', gap: '#3d040a', rope: ['#8f6a35', '#d9b57c', '#f8e6bf'] },
+  green: { dark: '#0a3a20', base: '#1f7a45', light: '#67c48c', gap: '#05200d', rope: ['#8f6a35', '#d9b57c', '#f8e6bf'] },
+  cream: { dark: '#a19170', base: '#efe4cf', light: '#fffdf7', gap: '#7d6f52', rope: ['#9c8a62', '#e3d4b3', '#fffaf0'] },
+};
+const KNIT_COLORS = ['red', 'green', 'cream'];
+const KNIT_S = 2; // пикселей на единицу: хватает для чётких экранов и быстро рисуется на телефоне
+const KNIT_W = 70;
+const KNIT_H = 112;
+const knitSprites = {};
+const knitShown = {};
+
+function knitLayer() {
+  const canvas = document.createElement('canvas');
+  canvas.width = KNIT_W * KNIT_S;
+  canvas.height = KNIT_H * KNIT_S;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(KNIT_S, 0, 0, KNIT_S, 5 * KNIT_S, 5 * KNIT_S);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  return [canvas, ctx];
+}
+
+// размытая обводка через тень: работает и там, где у canvas нет filter
+function knitSoftStroke(ctx, path, width, color, blur) {
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = blur * KNIT_S;
+  ctx.shadowOffsetX = 3000;
+  ctx.translate(-3000 / KNIT_S, 0);
+  ctx.lineWidth = width;
+  ctx.stroke(path);
+  ctx.restore();
+}
+
+function knitSprite(digit, color) {
+  const key = digit + color;
+  if (knitSprites[key]) return knitSprites[key];
+
+  const yarn = KNIT_YARN[color];
+  const path = new Path2D(KNIT_DIGITS[digit]);
+  let seed = digit * 97 + color.length * 131 + 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  // 1. Полотно: столбики петель-«галочек», каждая ножка — округлая прядь с бликом и ворсом
+  const [bodyCanvas, body] = knitLayer();
+  body.fillStyle = yarn.gap;
+  body.fillRect(-5, -5, KNIT_W, KNIT_H);
+  for (let y = -4; y < 106; y += 4.5) {
+    for (let x = 0; x < 64; x += 6.2) {
+      for (const side of [-1, 1]) {
+        body.save();
+        body.translate(x + side * 1.55 + (rand() - 0.5) * 0.35, y + (rand() - 0.5) * 0.35);
+        body.rotate(side * 0.52);
+        const strand = body.createLinearGradient(-1.9, 0, 1.9, 0);
+        strand.addColorStop(0, yarn.dark);
+        strand.addColorStop(0.36, yarn.base);
+        strand.addColorStop(0.6, yarn.light);
+        strand.addColorStop(1, yarn.dark);
+        body.fillStyle = strand;
+        body.beginPath();
+        body.ellipse(0, 0, 1.9, 3.5, 0, 0, Math.PI * 2);
+        body.fill();
+        body.strokeStyle = yarn.light;
+        body.globalAlpha = 0.3;
+        body.lineWidth = 0.22;
+        for (const fiber of [-0.75, -0.1, 0.6]) {
+          body.beginPath();
+          body.moveTo(fiber, -2.7);
+          body.lineTo(fiber + 0.3, 2.7);
+          body.stroke();
+        }
+        body.restore();
+      }
+    }
+  }
+  body.globalCompositeOperation = 'destination-in';
+  body.lineWidth = 19;
+  body.stroke(path);
+
+  // 2. Объём: мягкое затемнение к краям и блик вдоль верхней левой стороны
+  const [shadeCanvas, shade] = knitLayer();
+  knitSoftStroke(shade, path, 19, 'rgba(0, 0, 0, 0.62)', 2.2);
+  shade.globalCompositeOperation = 'destination-out';
+  knitSoftStroke(shade, path, 8, '#000', 2.8);
+  const [glowCanvas, glow] = knitLayer();
+  glow.translate(-1.6, -2);
+  knitSoftStroke(glow, path, 4, 'rgba(255, 255, 255, 0.3)', 2.4);
+  body.globalCompositeOperation = 'source-atop';
+  body.setTransform(1, 0, 0, 1, 0, 0);
+  body.drawImage(shadeCanvas, 0, 0);
+  body.drawImage(glowCanvas, 0, 0);
+
+  // 3. Кручёный шнур по краю
+  const [ropeCanvas, rope] = knitLayer();
+  rope.lineWidth = 27;
+  rope.strokeStyle = yarn.rope[1];
+  rope.stroke(path);
+  rope.globalCompositeOperation = 'source-atop';
+  rope.lineCap = 'butt';
+  rope.setLineDash([2.4, 2.4]);
+  rope.strokeStyle = yarn.rope[0];
+  rope.globalAlpha = 0.8;
+  rope.stroke(path);
+  rope.setLineDash([0.9, 3.9]);
+  rope.lineDashOffset = -2.95;
+  rope.strokeStyle = yarn.rope[2];
+  rope.globalAlpha = 0.9;
+  rope.stroke(path);
+  rope.setLineDash([]);
+  rope.globalAlpha = 1;
+  rope.lineCap = 'round';
+  const [rimCanvas, rim] = knitLayer();
+  knitSoftStroke(rim, path, 27, 'rgba(0, 0, 0, 0.5)', 1.6);
+  rim.globalCompositeOperation = 'destination-out';
+  knitSoftStroke(rim, path, 22, '#000', 1.4);
+  rope.setTransform(1, 0, 0, 1, 0, 0);
+  rope.drawImage(rimCanvas, 0, 0);
+
+  // 4. Сборка: тень на «столе», шнур, бороздка между шнуром и полотном, полотно
+  const [outCanvas, out] = knitLayer();
+  out.save();
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  out.shadowColor = 'rgba(0, 0, 0, 0.65)';
+  out.shadowBlur = 5 * KNIT_S;
+  out.shadowOffsetY = 2.5 * KNIT_S;
+  out.drawImage(ropeCanvas, 0, 0);
+  out.restore();
+  out.lineWidth = 20.6;
+  out.strokeStyle = 'rgba(35, 18, 5, 0.6)';
+  out.stroke(path);
+  out.save();
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  out.drawImage(bodyCanvas, 0, 0);
+  out.restore();
+
+  // 5. Одна золотая бусина-бубенчик на цифру, пришитая к полотну
+  const probe = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  probe.setAttribute('d', KNIT_DIGITS[digit]);
+  const spot = probe.getPointAtLength(probe.getTotalLength() * (0.16 + rand() * 0.1));
+  out.save();
+  out.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  out.shadowBlur = 2 * KNIT_S;
+  out.shadowOffsetY = 1.2 * KNIT_S;
+  const gold = out.createRadialGradient(spot.x - 1.7, spot.y - 1.9, 0.3, spot.x, spot.y, 5);
+  gold.addColorStop(0, '#fff8d6');
+  gold.addColorStop(0.3, '#f3c95a');
+  gold.addColorStop(0.75, '#c08a22');
+  gold.addColorStop(1, '#7c5410');
+  out.fillStyle = gold;
+  out.beginPath();
+  out.arc(spot.x, spot.y, 4.6, 0, Math.PI * 2);
+  out.fill();
+  out.restore();
+  out.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  out.beginPath();
+  out.ellipse(spot.x - 1.6, spot.y - 1.9, 1.1, 0.7, -0.6, 0, Math.PI * 2);
+  out.fill();
+
+  return (knitSprites[key] = outCanvas.toDataURL());
+}
+
+// Готовые картинки цифр из папки digits (N.webp). Для цифр, которых там нет, остаются нарисованные
+const KNIT_PHOTO_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+// номер версии меняется при замене картинок, чтобы браузер не показывал старые из кэша
+const knitPhotoUrl = (digit) => `digits/${digit}.webp?v=4`;
+const knitPhotos = new Set();
+for (const digit of KNIT_PHOTO_DIGITS) {
+  const img = new Image();
+  img.onload = () => {
+    knitPhotos.add(digit);
+    for (const id of Object.keys(knitShown)) delete knitShown[id];
+    tick();
+  };
+  img.src = knitPhotoUrl(digit);
+}
+
+// offset сдвигает чередование цветов у нарисованных цифр, чтобы соседние ячейки отличались
+function setKnit(id, value, offset) {
+  const text = pad(value);
+  if (knitShown[id] === text) return;
+  knitShown[id] = text;
+
+  const el = $(id);
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', text);
+  el.innerHTML = `<span class="knit-row" style="--n:${text.length}">${[...text].map((char, i) => {
+    const digit = Number(char);
+    const src = knitPhotos.has(digit) ? knitPhotoUrl(digit) : knitSprite(digit, KNIT_COLORS[(offset + i) % KNIT_COLORS.length]);
+    return `<img src="${src}" alt="" draggable="false">`;
+  }).join('')}</span>`;
+}
+
 /* ---------- Таймеры ---------- */
 
 function tick() {
@@ -475,10 +704,10 @@ function tick() {
 
   const newYear = new Date(now.getFullYear() + 1, 0, 1);
   const toNewYear = Math.max(0, newYear - now);
-  $('cdDays').textContent = pad(Math.floor(toNewYear / 86400000));
-  $('cdHours').textContent = pad(Math.floor(toNewYear / 3600000) % 24);
-  $('cdMinutes').textContent = pad(Math.floor(toNewYear / 60000) % 60);
-  $('cdSeconds').textContent = pad(Math.floor(toNewYear / 1000) % 60);
+  setKnit('cdDays', Math.floor(toNewYear / 86400000), 0);
+  setKnit('cdHours', Math.floor(toNewYear / 3600000) % 24, 2);
+  setKnit('cdMinutes', Math.floor(toNewYear / 60000) % 60, 4);
+  setKnit('cdSeconds', Math.floor(toNewYear / 1000) % 60, 6);
 
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const toMidnight = Math.max(0, midnight - now);
