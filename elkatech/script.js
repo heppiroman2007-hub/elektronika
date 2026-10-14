@@ -1111,6 +1111,39 @@ window.addEventListener('resize', () => {
   renderGarland();
 });
 
+/* ---------- Искорки за курсором ---------- */
+
+// только для мыши и только если пользователь не просил меньше анимации
+if (window.matchMedia('(hover: hover) and (pointer: fine)').matches && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const TRAIL = [
+    { char: '❄', color: '#ffffff' },
+    { char: '✦', color: '#ffd166' },
+    { char: '•', color: '#ff8a94' },
+  ];
+  let lastTrail = 0;
+  let activeTrail = 0;
+  document.addEventListener('pointermove', (e) => {
+    const now = performance.now();
+    if (now - lastTrail < 45 || activeTrail > 24) return;
+    lastTrail = now;
+    const kind = TRAIL[Math.floor(Math.random() * TRAIL.length)];
+    const spark = document.createElement('span');
+    spark.className = 'trail';
+    spark.textContent = kind.char;
+    spark.style.left = `${e.clientX + 6}px`;
+    spark.style.top = `${e.clientY + 8}px`;
+    spark.style.setProperty('--color', kind.color);
+    spark.style.setProperty('--size', `${8 + Math.random() * 8}px`);
+    spark.style.setProperty('--dx', `${(Math.random() - 0.5) * 30}px`);
+    activeTrail++;
+    spark.addEventListener('animationend', () => {
+      spark.remove();
+      activeTrail--;
+    });
+    document.body.appendChild(spark);
+  }, { passive: true });
+}
+
 /* ---------- Запуск ---------- */
 
 renderTags();
